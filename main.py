@@ -167,6 +167,6 @@ def process_excel(input_file, output_file):
         print(f"Updated output file after processing {query}")
 
 if __name__ == "__main__":
-    input_file = 'input.xlsx'  # Path to the input Excel file
+    input_file = 'datas.xlsx'  # Path to the input Excel file
     output_file = 'output.xlsx'  # Path to the output Excel file
     process_excel(input_file, output_file)
