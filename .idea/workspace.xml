@@ -4,9 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="224bdedd-6e4f-41f6-8f3a-451aced4b388" name="Changes" comment="initial commit">
-      <change afterPath="$PROJECT_DIR$/datas.xlsx" afterDir="false" />
+    <list default="true" id="224bdedd-6e4f-41f6-8f3a-451aced4b388" name="Changes" comment="Add source data and start working on scraper">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/datas.xlsx" beforeDir="false" afterPath="$PROJECT_DIR$/datas.xlsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -40,6 +40,7 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Python.main.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "git-widget-placeholder": "master",
     "ignore.virus.scanning.warn.message": "true",
@@ -75,7 +76,15 @@
       <option name="project" value="LOCAL" />
       <updated>1740441060333</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="Add source data and start working on scraper">
+      <option name="closed" value="true" />
+      <created>1740442461748</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1740442461748</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -91,6 +100,7 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="initial commit" />
-    <option name="LAST_COMMIT_MESSAGE" value="initial commit" />
+    <MESSAGE value="Add source data and start working on scraper" />
+    <option name="LAST_COMMIT_MESSAGE" value="Add source data and start working on scraper" />
   </component>
 </project>
