@@ -65,6 +65,14 @@ def extract_website(soup, query):
                     return f"www.{domain}"
     return None
 
+def extract_whatsapp_link(soup):
+    # Extract WhatsApp link from the soup
+    for link in soup.find_all('a', href=True):
+        href = link['href']
+        if "wa.me" in href:
+            return href
+    return None
+
 def scrape_website(url, query):
     try:
         response = requests.get(url, timeout=10)
@@ -72,10 +80,11 @@ def scrape_website(url, query):
         soup = BeautifulSoup(response.text, 'html.parser')
         phone_numbers = extract_phone_number(soup)
         website = extract_website(soup, query)
-        return phone_numbers, website
+        whatsapp_link = extract_whatsapp_link(soup)
+        return phone_numbers, website, whatsapp_link
     except Exception as e:
         print(f"Error fetching {url}: {e}")
-        return [], None
+        return [], None, None
 
 def process_excel(input_file, output_file):
     df = pd.read_excel(input_file)
@@ -97,29 +106,50 @@ def process_excel(input_file, output_file):
             print(link)
 
         all_phone_numbers = []
-        website = None
+        websites = []
+        whatsapp_links = []
+
         for link in links:
             print(f"\nScraping: {link}")
-            phone_numbers, extracted_website = scrape_website(link, query)
+            phone_numbers, website, whatsapp_link = scrape_website(link, query)
             if phone_numbers:
                 print(f"Phone Numbers Found: {phone_numbers}")
                 all_phone_numbers.extend(phone_numbers)
-            if extracted_website:
-                website = extracted_website
+            if website:
                 print(f"Website Found: {website}")
+                websites.append(website)
+            if whatsapp_link:
+                print(f"WhatsApp Link Found: {whatsapp_link}")
+                whatsapp_links.append(whatsapp_link)
 
         # Find the most common phone number
         if all_phone_numbers:
             phone_counter = Counter(all_phone_numbers)
-            most_common_phone = phone_counter.most_common(1)[0][0]
-            print(f"Most Common Phone Number: {most_common_phone}")
-            output_df.at[index, 'Telefon'] = most_common_phone
+            most_common_phone = phone_counter.most_common(1)[0]
+            if most_common_phone[1] > 1:
+                most_common_phone_number = most_common_phone[0]
+            else:
+                most_common_phone_number = ', '.join(all_phone_numbers)
+            print(f"Selected Phone Number: {most_common_phone_number}")
+            output_df.at[index, 'Telefon'] = most_common_phone_number
         else:
             print("\nNo phone numbers found after searching all links.")
 
-        if website:
-            print(f"Final Website: {website}")
-            output_df.at[index, 'Webseite'] = website
+        # Select the best website link
+        if websites:
+            # Prefer website links that contain the person's name
+            name_in_domain = [w for w in websites if any(word.lower() in w.lower() for word in query.split())]
+            if name_in_domain:
+                selected_website = name_in_domain[0]
+            else:
+                selected_website = websites[0]
+            print(f"Selected Website: {selected_website}")
+            output_df.at[index, 'Webseite'] = selected_website
+        elif whatsapp_links:
+            # Use WhatsApp link if no website is found
+            selected_website = whatsapp_links[0]
+            print(f"Selected Website (WhatsApp): {selected_website}")
+            output_df.at[index, 'Webseite'] = selected_website
         else:
             print("\nNo website found after searching all links.")
 
