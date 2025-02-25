@@ -37,18 +37,6 @@ def bing_search(driver, query):
             links.append(link)
     return links
 
-def comparis_search(driver, query):
-    driver.get(f"https://www.comparis.ch/suche/?q={query}")
-    time.sleep(5)  # Wait for the search results to load
-
-    soup = BeautifulSoup(driver.page_source, 'html.parser')
-    links = []
-    for g in soup.find_all('a', class_='cmp-product-teaser__title-link'):
-        link = g['href']
-        if link.startswith('http'):
-            links.append(link)
-    return links
-
 def extract_phone_number(soup):
     text = soup.get_text()
     # Regular expression to find phone numbers
@@ -120,6 +108,7 @@ def process_excel(input_file, output_file):
         all_phone_numbers = []
         websites = []
         whatsapp_links = []
+        comparis_links = []
 
         for link in links:
             print(f"\nScraping: {link}")
@@ -133,6 +122,9 @@ def process_excel(input_file, output_file):
             if whatsapp_link:
                 print(f"WhatsApp Link Found: {whatsapp_link}")
                 whatsapp_links.append(whatsapp_link)
+            if "comparis.ch" in link:
+                print(f"Comparis Link Found: {link}")
+                comparis_links.append(link)
 
         # Find the most common phone number
         if all_phone_numbers:
@@ -162,64 +154,19 @@ def process_excel(input_file, output_file):
             selected_website = whatsapp_links[0]
             print(f"Selected Website (WhatsApp): {selected_website}")
             output_df.at[index, 'Webseite'] = selected_website
+        elif comparis_links:
+            # Use comparis.ch link if no other website is found
+            selected_website = comparis_links[0]
+            print(f"Selected Website (Comparis): {selected_website}")
+            output_df.at[index, 'Webseite'] = selected_website
         else:
-            # Fallback to comparis.ch search
-            driver = setup_driver()
-            comparis_links = comparis_search(driver, query)
-            driver.quit()
-
-            print(f"Comparis Search Found {len(comparis_links)} links:")
-            for link in comparis_links:
-                print(link)
-
-            for link in comparis_links:
-                print(f"\nScraping: {link}")
-                phone_numbers, website, whatsapp_link = scrape_website(link, query)
-                if phone_numbers:
-                    print(f"Phone Numbers Found: {phone_numbers}")
-                    all_phone_numbers.extend(phone_numbers)
-                if website:
-                    print(f"Website Found: {website}")
-                    websites.append(website)
-                if whatsapp_link:
-                    print(f"WhatsApp Link Found: {whatsapp_link}")
-                    whatsapp_links.append(whatsapp_link)
-
-            # Re-evaluate phone numbers and websites after comparis search
-            if all_phone_numbers:
-                phone_counter = Counter(all_phone_numbers)
-                most_common_phone = phone_counter.most_common(1)[0]
-                if most_common_phone[1] > 1:
-                    most_common_phone_number = most_common_phone[0]
-                else:
-                    most_common_phone_number = ', '.join(all_phone_numbers)
-                print(f"Selected Phone Number: {most_common_phone_number}")
-                output_df.at[index, 'Telefon'] = most_common_phone_number
-            else:
-                print("\nNo phone numbers found after searching all links.")
-
-            if websites:
-                # Prefer website links that contain the person's name
-                name_in_domain = [w for w in websites if any(word.lower() in w.lower() for word in query.split())]
-                if name_in_domain:
-                    selected_website = name_in_domain[0]
-                else:
-                    selected_website = websites[0]
-                print(f"Selected Website: {selected_website}")
-                output_df.at[index, 'Webseite'] = selected_website
-            elif whatsapp_links:
-                # Use WhatsApp link if no website is found
-                selected_website = whatsapp_links[0]
-                print(f"Selected Website (WhatsApp): {selected_website}")
-                output_df.at[index, 'Webseite'] = selected_website
-            else:
-                print("\nNo website found after searching all links.")
+            print("\nNo website found after searching all links.")
 
         # Save the updated DataFrame to the output Excel file after each query
         output_df.to_excel(output_file, index=False)
         print(f"Updated output file after processing {query}")
 
 if __name__ == "__main__":
-    input_file = 'datas.xlsx'  # Path to the input Excel file
+    input_file = 'input.xlsx'  # Path to the input Excel file
     output_file = 'output.xlsx'  # Path to the output Excel file
     process_excel(input_file, output_file)
