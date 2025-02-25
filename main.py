@@ -1,137 +1,133 @@
+import time
+import re
 import pandas as pd
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
-import urllib.parse
-import logging
-import time
-import random
-from fake_useragent import UserAgent
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from bs4 import BeautifulSoup
+import requests
+from collections import Counter
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+def setup_driver():
+    chrome_options = Options()
+    # chrome_options.add_argument("--headless")  # Run in headless mode
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    service = Service('C:/Python/Project/chromedriver-win64/chromedriver.exe')  # Update this path
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    return driver
 
-class MedicalProviderScraper:
-    def __init__(self, excel_path):
-        self.excel_path = excel_path
-        self.df = None
-        self.driver = None
-        self.ua = UserAgent()
+def bing_search(driver, query):
+    driver.get("https://www.bing.com/")
+    time.sleep(2)  # Wait for the page to load
 
-    def setup_driver(self):
-        """Set up headless Chrome driver for web scraping"""
-        logger.info("Setting up Chrome driver...")
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-extensions")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument(f"--user-agent={self.ua.random}")
+    search_box = driver.find_element(By.NAME, "q")
+    search_box.send_keys(query)
+    search_box.send_keys(Keys.ENTER)
+    time.sleep(5)  # Wait for the search results to load
 
-        service = Service(ChromeDriverManager().install())
-        self.driver = webdriver.Chrome(service=service, options=chrome_options)
+    soup = BeautifulSoup(driver.page_source, 'html.parser')
+    links = []
+    for g in soup.find_all('li', class_='b_algo'):
+        anchors = g.find_all('a')
+        if anchors:
+            link = anchors[0]['href']
+            links.append(link)
+    return links
 
-    def read_excel(self):
-        """Read data from Excel file"""
-        logger.info(f"Reading data from {self.excel_path}")
-        try:
-            self.df = pd.read_excel(self.excel_path)
-            logger.info(f"Successfully read {len(self.df)} entries from Excel")
-            return True
-        except Exception as e:
-            logger.error(f"Error reading Excel file: {str(e)}")
-            return False
+def extract_phone_number(soup):
+    text = soup.get_text()
+    # Regular expression to find phone numbers
+    phone_pattern = re.compile(r'\+?\d[\d -]{8,}\d')
+    matches = phone_pattern.findall(text)
+    formatted_phones = []
+    for match in matches:
+        # Format phone number to +41 XX XXX XX XX
+        match = match.replace(" ", "").replace("-", "")
+        if len(match) == 12 and match.startswith('+41'):
+            formatted_phone = f"+{match[:2]} {match[2:4]} {match[4:7]} {match[7:9]} {match[9:]}"
+            formatted_phones.append(formatted_phone)
+    return formatted_phones
 
-    def generate_search_query(self, row):
-        """Generate search query based on available data"""
-        query_parts = []
-        if 'Name' in row and pd.notna(row['Name']):
-            query_parts.append(row['Name'])
-        if 'Institution' in row and pd.notna(row['Institution']):
-            query_parts.append(row['Institution'])
+def extract_website(soup, query):
+    # Extract website link from the soup
+    for link in soup.find_all('a', href=True):
+        href = link['href']
+        if href.startswith('http'):
+            domain = href.split('//')[1].split('/')[0]
+            if domain.startswith('www.'):
+                if any(word.lower() in domain.lower() for word in query.split()):
+                    return domain
+            else:
+                if any(word.lower() in domain.lower() for word in query.split()):
+                    return f"www.{domain}"
+    return None
 
-        return " ".join(query_parts).strip()
+def scrape_website(url, query):
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()  # Raise an error for bad responses
+        soup = BeautifulSoup(response.text, 'html.parser')
+        phone_numbers = extract_phone_number(soup)
+        website = extract_website(soup, query)
+        return phone_numbers, website
+    except Exception as e:
+        print(f"Error fetching {url}: {e}")
+        return [], None
 
-    def google_search(self, query):
-        """Perform a Google search and return the first result URL"""
-        search_url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
-        logger.info(f"Searching Google for: {query}")
-        self.driver.get(search_url)
+def process_excel(input_file, output_file):
+    df = pd.read_excel(input_file)
+    output_df = df.copy()
 
-        # Wait for search results to load
-        WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div#search')))
+    for index, row in df.iterrows():
+        first_name = row['Vorname']
+        last_name = row['Nachname']
+        location = row['Adresse']
+        query = f"{first_name} {last_name} {location}"
 
-        # Extract the first result link
-        try:
-            first_result = self.driver.find_element(By.CSS_SELECTOR, 'h3')
-            first_result.click()
-            WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'body')))
-            return self.driver.current_url
-        except Exception as e:
-            logger.error(f"Error retrieving Google search results: {str(e)}")
-            return None
+        driver = setup_driver()
+        links = bing_search(driver, query)
+        driver.quit()
 
-    def scrape_data_from_website(self, website):
-        """Scrape data from the given website for doctor information"""
-        # Implement scraping logic similar to existing scrape methods
-        # For example, you can check for specific elements to extract phone and website info
-        pass
+        print(f"Query: {query}")
+        print(f"Found {len(links)} links:")
+        for link in links:
+            print(link)
 
-    def process_data(self):
-        """Process each row in the Excel file using Selenium scraping"""
-        if self.df is None:
-            logger.error("No data loaded from Excel")
-            return False
+        all_phone_numbers = []
+        website = None
+        for link in links:
+            print(f"\nScraping: {link}")
+            phone_numbers, extracted_website = scrape_website(link, query)
+            if phone_numbers:
+                print(f"Phone Numbers Found: {phone_numbers}")
+                all_phone_numbers.extend(phone_numbers)
+            if extracted_website:
+                website = extracted_website
+                print(f"Website Found: {website}")
 
-        total_rows = len(self.df)
-        for index, row in self.df.iterrows():
-            try:
-                # Generate search query
-                search_query = self.generate_search_query(row)
-                if not search_query:
-                    logger.warning(f"Could not generate search query for entry {index+1}")
-                    continue
+        # Find the most common phone number
+        if all_phone_numbers:
+            phone_counter = Counter(all_phone_numbers)
+            most_common_phone = phone_counter.most_common(1)[0][0]
+            print(f"Most Common Phone Number: {most_common_phone}")
+            output_df.at[index, 'Telefon'] = most_common_phone
+        else:
+            print("\nNo phone numbers found after searching all links.")
 
-                # First attempt to search Google
-                google_url = self.google_search(search_query)
-                if google_url:
-                    logger.info(f"Found URL from Google: {google_url}")
-                    # Scrape the data from the found URL
-                    self.scrape_data_from_website(google_url)
+        if website:
+            print(f"Final Website: {website}")
+            output_df.at[index, 'Webseite'] = website
+        else:
+            print("\nNo website found after searching all links.")
 
-                # Add random delay between requests to avoid being blocked
-                time.sleep(random.uniform(3, 7))
-
-            except Exception as e:
-                logger.error(f"Error processing entry {index+1}: {str(e)}")
-                continue
-
-        return True
-
-    def run(self):
-        """Run the complete process"""
-        try:
-            if not self.read_excel():
-                return False
-
-            success = self.process_data()
-            return success
-
-        except Exception as e:
-            logger.error(f"Error running scraper: {str(e)}")
-            return False
-        finally:
-            if self.driver:
-                self.driver.quit()
+        # Save the updated DataFrame to the output Excel file after each query
+        output_df.to_excel(output_file, index=False)
+        print(f"Updated output file after processing {query}")
 
 if __name__ == "__main__":
-    # Example usage
-    excel_file = "datas.xlsx"
-    scraper = MedicalProviderScraper(excel_file)
-    scraper.run()
+    input_file = 'datas.xlsx'  # Path to the input Excel file
+    output_file = 'output.xlsx'  # Path to the output Excel file
+    process_excel(input_file, output_file)
